@@ -11,12 +11,12 @@ import sys
 #cursor.execute("insert into vulnerable_sites values(?,?,?,?)",toInsert)
 #conn.commit()
 
-
+database_name = ""
 def print_banner():
 	print "        _       __          __      _    __     __  __"
 	print "       / \\      \\ \\        / /     |  | |     ||  "
 	print "      /   \\      \\ \\      / /      |"
-	print "     /_____\\      \\ \\    / /"
+	print "     /_____\\      \\ \\    / /       |"
 
 def upload_shell():
 	url = raw_input("url:")
@@ -27,7 +27,7 @@ def upload_shell():
 def help():
 	print "Interactive help menu type  help <module> to get more information on a module\n"
 	print "upload-shell\t\t Upload a shell to target webserver"
-	print 
+	print "new-database\t\t Start a new database to keep track of webshells"
 
 def get_input():
 	userinput = raw_input("awsmi>")
@@ -44,14 +44,30 @@ def initialize_database():
 		only thing that will be committed is the changes to the schema
 	"""
 	
-	name = raw_input("database name:")
-	conn = sqlite3.connect(name)
+	name = raw_input("database name:")#prompting the user for a database name
+	conn = sqlite3.connect(name)#creating the database
+	cursor = conn.cursor()
+	cursor.execute("create table vulnerable_sites(url text, page text, method text, uploaded_shell text, attackurl text)")
+	conn.commit()
+
+def show_shells():
+	conn = sqlite3.connect(database_name)
+	query = "select * from vulnerable_sites"
+	cursor.execute(query)
 
 
+def exit():
+	sys.exit(1)
+
+#a dictionary of functions that we can call based off
+#of a user's input
 functions = {
 	"help":help,
 	"upload-shell":upload_shell,
-	"new-database":initialize_database
+	"new-database":initialize_database,
+	"view-shells":show_shells,
+	"exit":exit,
+	"quit":exit
 }
 
 def keyboardHandler(signal, frame):
@@ -59,8 +75,8 @@ def keyboardHandler(signal, frame):
 		sys.exit(0)
 
 def main():
-	signal.signal(signal.SIGINT, keyboardHandler)
 	#handles keyboard interrupts gracefully
+	signal.signal(signal.SIGINT, keyboardHandler)	
 
 	while 1:
 		get_input()
