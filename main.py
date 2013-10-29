@@ -3,15 +3,9 @@ import signal
 import sys
 import urllib2
 
-#conn = sqlite3.connect(":memory:")
-#cursor = conn.cursor()#setting up a memory database at the moment
-#cursor.execute("create table vulnerable_sites(url text, page text, method text, uploaded_shell text, attackurl text)")
-
-#toInsert = ['www.bing.com','about.php','get', '<?php passthru($_GET[\'cmd\']']
-#cursor.execute("insert into vulnerable_sites values(?,?,?,?)",toInsert)
-#conn.commit()
-
 database_name = ""
+prompt = "wsmi>"
+directory = ""
 def print_banner():
 	print "        _       __          __      _    __     __  __"
 	print "       / \\      \\ \\        / /     |  | |     ||  "
@@ -29,12 +23,39 @@ def help():
 	print "new-database\t\t Start a new database to keep track of webshells"
 	print "view-shells\t\t View information about the currently running shells"
 
+def router(command):
+	"""
+		Handles routing of functions that a simple dictionary will not accomplish
+		Takes the last part of the command that the user entered and interprets it.
+	"""
+	global prompt
+	global directory
+	if command[0:6] == "shells":
+		if len(command) == 6:
+			prompt = "wsmi (shells)>"
+			directory = "shells"
+		elif command[6:] == "/php":
+			prompt = "wsmi (shells/php)>"
+			directory = "shells/php"
+
+	
+
 def get_input():
-	userinput = raw_input("awsmi>")
-	try:
-		functions[userinput]()
-	except KeyError:
-		print "caught error"
+	global prompt
+	userinput = raw_input(prompt)
+	if userinput[:3] == "use":
+		router(userinput[4:])
+	else:
+		try:
+			functions[userinput]()
+		except KeyError:
+			print "caught error"
+
+def traverse_up():
+	"""
+		Responsible for moving up the directory structure
+	"""
+	global directory
 
 def initialize_database():
 	"""
@@ -70,7 +91,6 @@ def show_shells():
 		print str(i)+'\t\t',row[0]
 		i+=1
 
-
 def exit():
 	sys.exit(1)
 
@@ -83,12 +103,13 @@ functions = {
 	"view-shells":show_shells,
 	"exit":exit,
 	"quit":exit,
-	"shell":generate_scan_shell
+	"back":traverse_up
 }
 
 def keyboardHandler(signal, frame):
 		print ""
 		sys.exit(0)
+		#TODO: eventually write out to the database
 
 def main():
 	#handles keyboard interrupts gracefully
