@@ -6,6 +6,7 @@ import threading
 import socket
 import shells
 import encoders
+import random
 
 
 #variables related to threading
@@ -34,6 +35,12 @@ class threading_network_listener(threading.Thread):
 		return listen_socket
 	
 	def run(self):
+		"""
+			Responsible for the running of the thread.
+			Creates a socket and receives data from the network.
+			If there is a transmission on this socket then this thread will add
+			the entry to the database
+		"""
 		self.socket = self.create_socket()
 
 		#we only need to accept once in this scenario.
@@ -67,14 +74,23 @@ class threading_http_request(threading.Thread):
 		Will notify the threading_network_listener thread in the event
 		of an error that the remote server can't connect back.
 	"""
-	def __init__(self):
-		pass
+	def __init__(self,url=None):
+		threading.Thread.__init__(self)
+		self.url = url#the url that this thread will connect to.
+
+	def run(self):
+		"""
+			Handles making a request to the instance of this class's
+			url.
+		"""
 
 
+#global variables
 database_name = ""
 prompt = "wsmi>"
 directory = ""
 current_shell_id = 0
+port_list = []
 
 def print_banner():
 	print "        _       __          __      _    __     __  __"
@@ -179,24 +195,25 @@ def exit():
 
 def manage_random_list():
 	"""
-		good candidate for a python generator.
 		Will manage a list of port numbers for scanning candidate shells
-		randomly and not having a repeat in port numbers.
+		randomly and not having a repeat in port numbers.  Yields the port number to 
+		scan on.  Having an element of randomness will help not to be easily discovered.
 		will generate port numbers from 1025-65535(non privileged ports)
 	"""
-	port_list = []
-	for i in range(1025,65536):
-		port_list.append(i)
-	dev_urand_file = open('/dev/urandom')
-	rnd_nmb = read(dev_urand_file)
-	print port_list
+	global port_list
+	random.seed()
+	random_index = random.randrange(0,len(port_list))
+	port_number = port_list.pop(random_index)
+	yield port_number
 
 def run_candidate_threads(thread_count, timing):
 	"""
-
+		Runs and manages threads for 
 	"""
 	net_listen = threading_network_listener(65535)
 	net_listen.start()
+	http_thread = threading_http_request()
+	http_thread.start()
 	
 def check_candidacy():
 	"""
@@ -231,7 +248,16 @@ def keyboardHandler(signal, frame):
 		sys.exit(0)
 		#TODO: eventually write out to the database
 
+def initialize():
+	"""Handles the initialization for the entire program"""
+	#creates a 
+	for i in range(1025,65536):
+		port_list.append(i)
+
 def main():
+	#initialization function
+	initialize()
+
 	#handles keyboard interrupts gracefully
 	signal.signal(signal.SIGINT, keyboardHandler)
 	a = threading_network_listener()
@@ -258,5 +284,4 @@ def http_file_upload(url,filename):
 	data += "Content-Type: application/x-object\r\n\r\n"+file_contents+'\r\n'+boundary+'--\r\n'
 	request = urllib2.Request(url,data,headers)
 
-#main()
-manage_random_list()
+main()
