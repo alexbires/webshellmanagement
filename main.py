@@ -12,6 +12,8 @@ import random
 #variables related to threading
 database_lock = threading.Lock()#serialize access to the database
 
+port_condition = threading.Condition()#condition to tell the socket listener to prematurely exit or not
+
 ###next section is for threading combined with sockets
 class threading_network_listener(threading.Thread):
 	"""
@@ -74,15 +76,20 @@ class threading_http_request(threading.Thread):
 		Will notify the threading_network_listener thread in the event
 		of an error that the remote server can't connect back.
 	"""
-	def __init__(self,url=None):
+	def __init__(self,url=None,port=None,self_ip=None,message=None):
 		threading.Thread.__init__(self)
 		self.url = url#the url that this thread will connect to.
+		self.port = port#the port that the web request will connect to
+		self.ip = self_ip#the attacker's machine
+		self.message = message#the message to send to the listening socket
 
 	def run(self):
 		"""
 			Handles making a request to the instance of this class's
 			url.
 		"""
+		query_string = self.url + "?p=" + str(self.port) +"&i=" + self.ip + "&m=" + self.message
+		response = urllib2.urlopen(query_string)
 
 
 #global variables
@@ -212,7 +219,7 @@ def run_candidate_threads(thread_count, timing):
 	"""
 	net_listen = threading_network_listener(65535)
 	net_listen.start()
-	http_thread = threading_http_request()
+	http_thread = threading_http_request("localhost",65535,"127.0.0.1","itch")
 	http_thread.start()
 	
 def check_candidacy():
