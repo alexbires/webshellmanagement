@@ -115,6 +115,17 @@ class threading_http_request(threading.Thread):
 		except ValueError:#something is wrong with the url
 			print "something went wrong"
 
+class connection():
+	"""
+		Class that handles the connection object per web shell.
+		This class will contain session variables based on the state of the webshell
+
+		@param port_list A list that contains all of the port numbers per shell that have not been tried
+	"""
+	def __init__(self, shell_id = -1):
+		self.port_list = []
+		self.shell_id = shell_id
+
 
 #global variables
 database_name = ""
@@ -244,7 +255,9 @@ def run_candidate_threads(thread_count, timing):
 		Runs and manages threads for checking whether or not a server would be a good
 		command and control candidate.
 	"""
-	
+	listener_array = []#holds all of the current threads
+	for i in range(thread_count):
+		listener_array.append(threading_network_listener)
 	net_listen = threading_network_listener()#will call a generator and 
 	net_listen.start()
 	print net_listen.port
