@@ -18,6 +18,12 @@ database_lock = threading.Lock()#serialize access to the database
 listener_abort_event = threading.Event()
 listener_success_event = threading.Event()
 
+#global variables
+database_name = ""
+prompt = "wsmi>"
+directory = ""
+current_shell_id = 0
+
 ###next section is for threading combined with sockets
 class threading_network_listener(threading.Thread):
 	"""
@@ -125,15 +131,27 @@ class connection():
 	def __init__(self, shell_id = -1):
 		self.port_list = []
 		self.shell_id = shell_id
+		self.list_lock = threading.Lock()#condition to access the internal port list
+		self.generator = generate_port_number()
 
+	#creates a list of port numbers to check for candidacy of a specific web shell
+	def initialize_connection(self):
+		for i in range(1025,65536):
+			self.port_list.append(i)
 
-#global variables
-database_name = ""
-prompt = "wsmi>"
-directory = ""
-current_shell_id = 0
-port_list = []
-generator = None
+	def generate_port_number():
+		"""
+			Responsible for generating a random number and then 
+			removing that index from the list of port numbers
+		"""
+		random.seed()
+		random_index = random.randrange(0,len(self.port_list))
+		port_number = self.port_list.pop(random_index)
+		yield port_number
+
+	def get_next_number():
+		pass
+
 
 def print_banner():
 	print "        _       __          __      _    __     __  __"
@@ -184,12 +202,6 @@ def get_input():
 		except KeyError:
 			print "caught error"
 
-def traverse_up():
-	"""
-		Responsible for moving up the directory structure
-	"""
-	global directory
-
 def initialize_database():
 	"""
 		Responsible for initializing a new database for storing user
@@ -237,18 +249,20 @@ def show_shells():
 def exit():
 	sys.exit(1)
 
+"""
 def manage_random_list():
-	"""
+	""
 		Will manage a list of port numbers for scanning candidate shells
 		randomly and not having a repeat in port numbers.  Yields the port number to 
 		scan on.  Having an element of randomness will help not to be easily discovered.
 		will generate port numbers from 1025-65535(non privileged ports)
-	"""
+	""
 	global port_list
 	random.seed()
 	random_index = random.randrange(0,len(port_list))
 	port_number = port_list.pop(random_index)
 	yield port_number
+"""
 
 def run_candidate_threads(thread_count, timing):
 	"""
@@ -256,8 +270,8 @@ def run_candidate_threads(thread_count, timing):
 		command and control candidate.
 	"""
 	listener_array = []#holds all of the current threads
-	for i in range(thread_count):
-		listener_array.append(threading_network_listener)
+	for i in range(thread_count):#create all the new network listeners
+		listener_array.append(threading_network_listener())
 	net_listen = threading_network_listener()#will call a generator and 
 	net_listen.start()
 	print net_listen.port
@@ -269,8 +283,8 @@ def check_candidacy():
 		script that starts the process of checking a candidacy for a specific 
 		web server.
 	"""
-	num_threads = raw_input("number of threads:")
-	timing = raw_input("timing level(0-5):")
+	num_threads = int(raw_input("number of threads:"))
+	timing = int(raw_input("timing level(0-5):"))
 	run_candidate_threads(num_threads,timing)
 
 def show_contents():
@@ -278,15 +292,38 @@ def show_contents():
 	
 	print "showing contents"
 
+def open_database():
+	"""
+		Opens an already existing database and prints out the webshells running 
+		as a part of the database
+	"""
+	try:
+		db_name = raw_input("Existing database name:")
+		conn = sqlite3.connect(db_name)
+		global database_name
+		database_name = db_name
+
+		cursor = conn.cursor()
+		cursor.execute("select id, attackurl from vulnerable_sites")
+		print "number\t\tattackurl"
+		print "------\t\t---------"
+		rows = cursor.fetchall()
+		for row in rows:
+			print row[0],"\t\t",row[1]
+	except sqlite3.OperationalError as e:
+		print e.message
+		#Todo: add prettier error messages
+
 #a dictionary of functions that we can call based off of a user's input
 functions = {
 	"help":help,
 	"upload-shell":upload_shell,
 	"new-database":initialize_database,
+	"open-database":open_database,
 	"view-shells":show_shells,
 	"exit":exit,
 	"quit":exit,
-	"back":traverse_up,
+	#"back":traverse_up,
 	"show":show_contents,
 	"check-candidacy":check_candidacy
 }
@@ -299,13 +336,10 @@ def keyboardHandler(signal, frame):
 
 def initialize():
 	"""Handles the initialization for the entire program"""
-	#creates a list of port numbers to check for candidacy of a specific web shell
-	#TODO move this over to an object because we are going to have to do this for 
-	#each webshell and this is inefficient at the moment.
-	for i in range(1025,65536):
-		port_list.append(i)
-	global generator
-	#generator = manage_random_list()
+	pass
+	#TODO I know this is going to come in handy but for the
+	#moment with only one connection object that is ever going to be 
+	#created then this will be used again.
 
 def main():
 	#initialization function
