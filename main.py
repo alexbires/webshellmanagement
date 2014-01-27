@@ -8,6 +8,7 @@ import shells
 import encoders
 import random
 import time
+from classes import connection 
 
 
 #variables related to threading
@@ -23,6 +24,7 @@ database_name = ""
 prompt = "wsmi>"
 directory = ""
 current_shell_id = 0
+connect = None
 
 ###next section is for threading combined with sockets
 class threading_network_listener(threading.Thread):
@@ -34,27 +36,23 @@ class threading_network_listener(threading.Thread):
 
 	def __init__(self, port = None):
 		threading.Thread.__init__(self)
+		print "in the constructor"
+		global connect
 		self.port = port#the intended port for the thread to listen on
 		self.listen_sock = None#the actual socket listening on the port
 		self.message = None
-		self.gen = manage_random_list()
-		self.get_next_socket_number()
-		self.socket = self.create_socket()
+		self.connection = connect#TODO handle mapping of connections with threads
+		self.port = port
+		print "self.port in the threading_network_listener init: ",self.port
+		self.socket = self.create_socket(port)
 
-	def create_socket(self):
+	def create_socket(self,port):
 		""" Creates a socket for the thread to listen on """
 		listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)#create a socket
-		listen_socket.bind(("", int(self.port)))#listens on any interface's ip address
+		listen_socket.bind(("", int(port)))#listens on any interface's ip address
 		listen_socket.listen(5)#actually listen to a port
-		print "network listener socket bound to port ",self.port
+		print "network listener socket bound to port ",self.port," ",port
 		return listen_socket
-
-	def get_next_socket_number(self):
-		"""
-			Handles the locking of the generator lock so the class can safely
-			grab a number from the generator
-		"""
-		self.port = self.gen.next()
 	
 	def run(self):
 		"""
@@ -72,6 +70,7 @@ class threading_network_listener(threading.Thread):
 		data = sock.recv(50)
 
 		time.sleep(.4)#waiting for .4 seconds for the network to respond
+		print 'woke up from my nap'
 		if listener_abort_event.isSet():#need to abort
 			pass
 		#if(data == "ok"):#the network message that will be sent to let us know the firewall is open
@@ -120,37 +119,6 @@ class threading_http_request(threading.Thread):
 				listener_abort_event.set()
 		except ValueError:#something is wrong with the url
 			print "something went wrong"
-
-class connection():
-	"""
-		Class that handles the connection object per web shell.
-		This class will contain session variables based on the state of the webshell
-
-		@param port_list A list that contains all of the port numbers per shell that have not been tried
-	"""
-	def __init__(self, shell_id = -1):
-		self.port_list = []
-		self.shell_id = shell_id
-		self.list_lock = threading.Lock()#condition to access the internal port list
-		self.generator = generate_port_number()
-
-	#creates a list of port numbers to check for candidacy of a specific web shell
-	def initialize_connection(self):
-		for i in range(1025,65536):
-			self.port_list.append(i)
-
-	def generate_port_number():
-		"""
-			Responsible for generating a random number and then 
-			removing that index from the list of port numbers
-		"""
-		random.seed()
-		random_index = random.randrange(0,len(self.port_list))
-		port_number = self.port_list.pop(random_index)
-		yield port_number
-
-	def get_next_number():
-		pass
 
 
 def print_banner():
@@ -269,13 +237,24 @@ def run_candidate_threads(thread_count, timing):
 		Runs and manages threads for checking whether or not a server would be a good
 		command and control candidate.
 	"""
+	global connect
 	listener_array = []#holds all of the current threads
 	for i in range(thread_count):#create all the new network listeners
-		listener_array.append(threading_network_listener())
-	net_listen = threading_network_listener()#will call a generator and 
-	net_listen.start()
-	print net_listen.port
-	http_thread = threading_http_request("192.168.56.102/shell.php",net_listen.port,"192.168.56.101","ok")
+		temp_gen = connect.new_get_port_number()
+		temp_listener = threading_network_listener(temp_gen)
+		print type(temp_listener)
+		listener_array.append(threading_network_listener(temp_gen))
+		print "added network listener to array yo"
+
+	print type(listener_array[0])
+	for thread in listener_array:#herp derp want the object not a pointer to it.
+
+		#print len(listener_array)
+		print thread
+		print type(thread)
+		thread.start()
+	
+	http_thread = threading_http_request("192.168.56.101/shell.php",net_listen.port,"192.168.56.102","ok")
 	http_thread.start()
 
 def check_candidacy():
@@ -336,7 +315,8 @@ def keyboardHandler(signal, frame):
 
 def initialize():
 	"""Handles the initialization for the entire program"""
-	pass
+	global connect
+	connect = connection.connection(1)#the 1 is for the id number of the shell to the connection object
 	#TODO I know this is going to come in handy but for the
 	#moment with only one connection object that is ever going to be 
 	#created then this will be used again.
