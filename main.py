@@ -24,7 +24,9 @@ database_name = ""
 prompt = "wsmi>"
 directory = ""
 current_shell_id = 0
-connect = None
+connect = None #might have to change this to being per listener
+#need to get rid of this so that we can have more than one thread derp
+
 
 ###next section is for threading combined with sockets
 class threading_network_listener(threading.Thread):
@@ -36,7 +38,7 @@ class threading_network_listener(threading.Thread):
 
 	def __init__(self, port = None):
 		threading.Thread.__init__(self)
-		global connect
+		self.connect = connection.connection(1)#need a way to pair connections with shells
 		self.port = port#the intended port for the thread to listen on
 		self.listen_sock = None#the actual socket listening on the port
 		self.message = None
@@ -48,6 +50,8 @@ class threading_network_listener(threading.Thread):
 	def create_socket(self,port):
 		""" Creates a socket for the thread to listen on """
 		listen_socket = None
+		print port
+		print type(port)
 		try:
 			listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)#create a socket
 			listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -241,14 +245,13 @@ def run_candidate_threads(thread_count, timing):
 	"""
 		Runs and manages threads for checking whether or not a server would be a good
 		command and control candidate.
-	"""
+	""" 
 	global connect
 	listener_array = []#holds all of the current threads
 	temp_gen = 0
 	for i in range(thread_count):#create all the new network listeners
 		temp_gen = connect.new_get_port_number()
 		temp_listener = threading_network_listener(temp_gen)
-		#temp_gen type(temp_listener)
 		listener_array.append(threading_network_listener(temp_gen))
 
 	for thread in listener_array:#herp derp want the object not a pointer to it.
@@ -315,8 +318,9 @@ def keyboardHandler(signal, frame):
 
 def initialize():
 	"""Handles the initialization for the entire program"""
-	global connect
-	connect = connection.connection(1)#the 1 is for the id number of the shell to the connection object
+	pass
+	#global connect
+	#connect = connection.connection(1)#the 1 is for the id number of the shell to the connection object
 	#TODO I know this is going to come in handy but for the
 	#moment with only one connection object that is ever going to be 
 	#created then this will be used again.
